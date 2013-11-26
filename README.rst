@@ -4,7 +4,10 @@ The Versioneer
 * https://github.com/warner/python-versioneer
 * Brian Warner
 * License: Public Domain
-* Compatible With: python2.5, 2.6, 2.7, 3.2
+* Compatible With: python2.5, 2.6, 2.7, and 3.2, 3.3
+
+.. image:: https://travis-ci.org/warner/python-versioneer.png?branch=master
+   :target: https://travis-ci.org/warner/python-versioneer
 
 This is a tool for managing a recorded version number in distutils-based
 python projects. The goal is to remove the tedious and error-prone "update
@@ -81,6 +84,10 @@ tarballs), the process is:
 
  1: git tag 1.0
  2: git push; git push --tags
+
+Currently, all version strings must be based upon a tag. Versioneer will
+report "unknown" until your tree has at least one tag in its history. This
+restriction will be fixed eventually (see issue #12).
 
 
 Future Directions

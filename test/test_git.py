@@ -10,6 +10,10 @@ sys.path.insert(0, "src")
 from git.middle import versions_from_expanded_variables
 from subprocess_helper import run_command
 
+GITS = ["git"]
+if sys.platform == "win32":
+    GITS = ["git.cmd", "git.exe"]
+
 class Variables(unittest.TestCase):
     def parse(self, refnames, full, prefix=""):
         return versions_from_expanded_variables({"refnames": refnames,
@@ -50,14 +54,14 @@ class Repo(unittest.TestCase):
     def git(self, *args, **kwargs):
         workdir = kwargs.pop("workdir", self.subpath("demoapp"))
         assert not kwargs, kwargs.keys()
-        output = run_command(["git"]+list(args), workdir, True)
+        output = run_command(GITS, list(args), workdir, True)
         if output is None:
             self.fail("problem running git")
         return output
     def python(self, *args, **kwargs):
         workdir = kwargs.pop("workdir", self.subpath("demoapp"))
         assert not kwargs, kwargs.keys()
-        output = run_command([sys.executable]+list(args), workdir, True)
+        output = run_command([sys.executable], list(args), workdir, True)
         if output is None:
             self.fail("problem running python")
         return output
@@ -118,10 +122,17 @@ class Repo(unittest.TestCase):
         self.assertEqual(out[0], "running update_files")
         self.assertEqual(out[1], " creating src/demo/_version.py")
         self.assertEqual(out[2], " appending to src/demo/__init__.py")
-        out = self.git("status", "--porcelain").splitlines()
-        self.assertEqual(out[0], "A  .gitattributes")
-        self.assertEqual(out[1], "M  src/demo/__init__.py")
-        self.assertEqual(out[2], "A  src/demo/_version.py")
+        self.assertEqual(out[3], " appending 'versioneer.py' to MANIFEST.in")
+        self.assertEqual(out[4], " appending versionfile_source ('src/demo/_version.py') to MANIFEST.in")
+        out = set(self.git("status", "--porcelain").splitlines())
+        # Many folks have a ~/.gitignore with ignores .pyc files, but if they
+        # don't, it will show up in the status here. Ignore it.
+        out.discard("?? versioneer.pyc")
+        out.discard("?? __pycache__/")
+        self.assertEqual(out, set(["A  .gitattributes",
+                                   "A  MANIFEST.in",
+                                   "M  src/demo/__init__.py",
+                                   "A  src/demo/_version.py"]))
         f = open(self.subpath("demoapp/src/demo/__init__.py"))
         i = f.read().splitlines()
         f.close()
@@ -129,6 +140,19 @@ class Repo(unittest.TestCase):
         self.assertEqual(i[-2], "__version__ = get_versions()['version']")
         self.assertEqual(i[-1], "del get_versions")
         self.git("commit", "-m", "add _version stuff")
+
+        # "setup.py update_files" should be idempotent
+        out = self.python("setup.py", "update_files").splitlines()
+        self.assertEqual(out[0], "running update_files")
+        self.assertEqual(out[1], " creating src/demo/_version.py")
+        self.assertEqual(out[2], " src/demo/__init__.py unmodified")
+        self.assertEqual(out[3], " 'versioneer.py' already in MANIFEST.in")
+        self.assertEqual(out[4], " versionfile_source already in MANIFEST.in")
+        out = set(self.git("status", "--porcelain").splitlines())
+        out.discard("?? versioneer.pyc")
+        out.discard("?? __pycache__/")
+        self.assertEqual(out, set([]))
+
         self.git("tag", "demo-1.0")
         short = "1.0"
         full = self.git("rev-parse", "HEAD")
@@ -247,6 +271,6 @@ class Repo(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    ver = run_command(["git", "--version"], ".", True)
+    ver = run_command(GITS, ["--version"], ".", True)
     print("git --version: %s" % ver.strip())
     unittest.main()

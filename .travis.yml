@@ -1,6 +1,5 @@
 language: python
 python:
-  - "2.5"
   - "2.6"
   - "2.7"
   - "3.2"
@@ -12,4 +11,5 @@ before_script:
   - git config --global user.email "foo@example.com"
   - git config --global user.name "foo"
 script:
+  - python setup.py make_versioneer
   - python test/test_git.py

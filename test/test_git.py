@@ -7,17 +7,17 @@ import unittest
 import tempfile
 
 sys.path.insert(0, "src")
-from git.middle import versions_from_expanded_variables
+from git.from_keywords import git_versions_from_keywords
 from subprocess_helper import run_command
 
 GITS = ["git"]
 if sys.platform == "win32":
     GITS = ["git.cmd", "git.exe"]
 
-class Variables(unittest.TestCase):
+class Keywords(unittest.TestCase):
     def parse(self, refnames, full, prefix=""):
-        return versions_from_expanded_variables({"refnames": refnames,
-                                                 "full": full}, prefix)
+        return git_versions_from_keywords({"refnames": refnames, "full": full},
+                                          prefix)
 
     def test_parse(self):
         v = self.parse(" (HEAD, 2.0,master  , otherbranch ) ", " full ")
@@ -83,12 +83,28 @@ class Repo(unittest.TestCase):
     # In three runtime situations:
     #  RA1: setup.py --version
     #  RA2: ...path/to/setup.py --version (from outside the source tree)
-    #  RB: setup.py build;  demoapp --version
+    #  RB: setup.py build;  rundemo --version
     #
     # We can only detect dirty files in real git trees, so we don't examine
     # SB for TB/TC/TD/TE, or RB.
 
+    # note that the repo being manipulated is always named "demoapp",
+    # regardless of which source directory we copied it from (test/demoapp/
+    # or test/demoapp-script-only/)
+
     def test_full(self):
+        self.run_test("test/demoapp", False)
+
+    def test_script_only(self):
+        # This test looks at an application that consists entirely of a
+        # script: no libraries (so its setup.py has packages=[]). This sort
+        # of app cannot be run from source: you must 'setup.py build' to get
+        # anything executable. So of the 3 runtime situations examined by
+        # Repo.test_full above, we only care about RB. (RA1 is valid too, but
+        # covered by Repo).
+        self.run_test("test/demoapp-script-only", True)
+
+    def run_test(self, demoapp_dir, script_only):
         self.testdir = tempfile.mkdtemp()
         if VERBOSE: print("testdir: %s" % (self.testdir,))
         if os.path.exists(self.testdir):
@@ -106,7 +122,13 @@ class Repo(unittest.TestCase):
         self.git("commit", "-m", "first false commit", workdir=self.testdir)
         self.git("tag", "demo-4.0", workdir=self.testdir)
 
-        shutil.copytree("test/demoapp", self.subpath("demoapp"))
+        shutil.copytree(demoapp_dir, self.subpath("demoapp"))
+        setup_py_fn = os.path.join(self.subpath("demoapp"), "setup.py")
+        with open(setup_py_fn, "r") as f:
+            setup_py = f.read()
+        setup_py = setup_py.replace("@VCS@", "git")
+        with open(setup_py_fn, "w") as f:
+            f.write(setup_py)
         shutil.copyfile("versioneer.py", self.subpath("demoapp/versioneer.py"))
         self.git("init")
         self.git("add", "--all")
@@ -118,10 +140,13 @@ class Repo(unittest.TestCase):
                         "--version", workdir=self.testdir)
         self.assertEqual(v, "unknown")
 
-        out = self.python("setup.py", "update_files").splitlines()
-        self.assertEqual(out[0], "running update_files")
+        out = self.python("setup.py", "versioneer").splitlines()
+        self.assertEqual(out[0], "running versioneer")
         self.assertEqual(out[1], " creating src/demo/_version.py")
-        self.assertEqual(out[2], " appending to src/demo/__init__.py")
+        if script_only:
+            self.assertEqual(out[2], " src/demo/__init__.py doesn't exist, ok")
+        else:
+            self.assertEqual(out[2], " appending to src/demo/__init__.py")
         self.assertEqual(out[3], " appending 'versioneer.py' to MANIFEST.in")
         self.assertEqual(out[4], " appending versionfile_source ('src/demo/_version.py') to MANIFEST.in")
         out = set(self.git("status", "--porcelain").splitlines())
@@ -129,23 +154,29 @@ class Repo(unittest.TestCase):
         # don't, it will show up in the status here. Ignore it.
         out.discard("?? versioneer.pyc")
         out.discard("?? __pycache__/")
-        self.assertEqual(out, set(["A  .gitattributes",
-                                   "A  MANIFEST.in",
-                                   "M  src/demo/__init__.py",
-                                   "A  src/demo/_version.py"]))
-        f = open(self.subpath("demoapp/src/demo/__init__.py"))
-        i = f.read().splitlines()
-        f.close()
-        self.assertEqual(i[-3], "from ._version import get_versions")
-        self.assertEqual(i[-2], "__version__ = get_versions()['version']")
-        self.assertEqual(i[-1], "del get_versions")
+        expected = set(["A  .gitattributes",
+                        "M  MANIFEST.in",
+                        "A  src/demo/_version.py"])
+        if not script_only:
+            expected.add("M  src/demo/__init__.py")
+        self.assertEqual(out, expected)
+        if not script_only:
+            f = open(self.subpath("demoapp/src/demo/__init__.py"))
+            i = f.read().splitlines()
+            f.close()
+            self.assertEqual(i[-3], "from ._version import get_versions")
+            self.assertEqual(i[-2], "__version__ = get_versions()['version']")
+            self.assertEqual(i[-1], "del get_versions")
         self.git("commit", "-m", "add _version stuff")
 
-        # "setup.py update_files" should be idempotent
-        out = self.python("setup.py", "update_files").splitlines()
-        self.assertEqual(out[0], "running update_files")
+        # "setup.py versioneer" should be idempotent
+        out = self.python("setup.py", "versioneer").splitlines()
+        self.assertEqual(out[0], "running versioneer")
         self.assertEqual(out[1], " creating src/demo/_version.py")
-        self.assertEqual(out[2], " src/demo/__init__.py unmodified")
+        if script_only:
+            self.assertEqual(out[2], " src/demo/__init__.py doesn't exist, ok")
+        else:
+            self.assertEqual(out[2], " src/demo/__init__.py unmodified")
         self.assertEqual(out[3], " 'versioneer.py' already in MANIFEST.in")
         self.assertEqual(out[4], " versionfile_source already in MANIFEST.in")
         out = set(self.git("status", "--porcelain").splitlines())
@@ -205,10 +236,10 @@ class Repo(unittest.TestCase):
         t.close()
         exp_short_TD = exp_short
         if state == "SC":
-            # expanded variables only tell us about tags and full
-            # revisionids, not how many patches we are beyond a tag. So we
-            # can't expect the short version to be like 1.0-1-gHEXID. The
-            # code falls back to short=long
+            # expanded keywords only tell us about tags and full revisionids,
+            # not how many patches we are beyond a tag. So we can't expect
+            # the short version to be like 1.0-1-gHEXID. The code falls back
+            # to short=long
             exp_short_TD = exp_long
         self.check_version(target, exp_short_TD, exp_long, False, state, tree="TD")
 
@@ -251,7 +282,7 @@ class Repo(unittest.TestCase):
         self.compare(v, exp_short, state, tree, "RA2")
 
         if dirty:
-            return # cannot detect dirty files in a build
+            return # cannot detect dirty files in a build # XXX really?
 
         # RB: setup.py build; rundemo --version
         if os.path.exists(os.path.join(workdir, "build")):
@@ -259,10 +290,6 @@ class Repo(unittest.TestCase):
         self.python("setup.py", "build", "--build-lib=build/lib",
                     "--build-scripts=build/lib", workdir=workdir)
         build_lib = os.path.join(workdir, "build", "lib")
-        # copy bin/rundemo into the build libdir, so we don't have to muck
-        # with PYTHONPATH when we execute it
-        shutil.copyfile(os.path.join(workdir, "bin", "rundemo"),
-                        os.path.join(build_lib, "rundemo"))
         out = self.python("rundemo", "--version", workdir=build_lib)
         data = dict([line.split(":",1) for line in out.splitlines()])
         self.compare(data["__version__"], exp_short, state, tree, "RB")

@@ -5,7 +5,7 @@ The Versioneer
 * https://github.com/warner/python-versioneer
 * Brian Warner
 * License: Public Domain
-* Compatible With: python2.6, 2.7, and 3.2, 3.3
+* Compatible With: python2.6, 2.7, 3.2, 3.3, 3.4, and pypy
 
 [![Build Status](https://travis-ci.org/warner/python-versioneer.png?branch=master)](https://travis-ci.org/warner/python-versioneer)
 
@@ -38,7 +38,7 @@ this tool is format-agnostic) can come from a variety of places:
 * ask the VCS tool itself, e.g. "git describe" (for checkouts), which knows
   about recent "tags" and an absolute revision-id
 * the name of the directory into which the tarball was unpacked
-* an expanded VCS variable ($Id$, etc)
+* an expanded VCS keyword ($Id$, etc)
 * a `_version.py` created by some earlier build step
 
 For released software, the version identifier is closely related to a VCS
@@ -78,16 +78,26 @@ contain enough information to get the proper version.
 
 First, decide on values for the following configuration variables:
 
+* `VCS`: the version control system you use. Currently accepts "git".
+
 * `versionfile_source`:
 
   A project-relative pathname into which the generated version strings should
   be written. This is usually a `_version.py` next to your project's main
-  `__init__.py` file. If your project uses `src/myproject/__init__.py`, this
-  should be `src/myproject/_version.py`. This file should be checked in to
-  your VCS as usual: the copy created below by 'setup.py update_files' will
-  include code that parses expanded VCS keywords in generated tarballs. The
-  'build' and 'sdist' commands will replace it with a copy that has just the
-  calculated version string.
+  `__init__.py` file, so it can be imported at runtime. If your project uses
+  `src/myproject/__init__.py`, this should be `src/myproject/_version.py`.
+  This file should be checked in to your VCS as usual: the copy created below
+  by `setup.py versioneer` will include code that parses expanded VCS
+  keywords in generated tarballs. The 'build' and 'sdist' commands will
+  replace it with a copy that has just the calculated version string.
+
+  This must be set even if your project does not have any modules (and will
+  therefore never import `_version.py`), since "setup.py sdist" -based trees
+  still need somewhere to record the pre-calculated version strings. Anywhere
+  in the source tree should do. If there is a `__init__.py` next to your
+  `_version.py`, the `setup.py versioneer` command (described below) will
+  append some `__version__`-setting assignments, if they aren't already
+  present.
 
 *  `versionfile_build`:
 
@@ -96,6 +106,13 @@ First, decide on values for the following configuration variables:
   'package_dir='. If you have `package_dir={'myproject': 'src/myproject'}`,
   then you will probably have `versionfile_build='myproject/_version.py'` and
   `versionfile_source='src/myproject/_version.py'`.
+
+  If this is set to None, then `setup.py build` will not attempt to rewrite
+  any `_version.py` in the built tree. If your project does not have any
+  libraries (e.g. if it only builds a script), then you should use
+  `versionfile_build = None` and override `distutils.command.build_scripts`
+  to explicitly insert a copy of `versioneer.get_version()` into your
+  generated script.
 
 * `tag_prefix`:
 
@@ -122,6 +139,7 @@ To versioneer-enable your project:
   configuration values you decided earlier:
 
         import versioneer
+        versioneer.VCS = 'git'
         versioneer.versionfile_source = 'src/myproject/_version.py'
         versioneer.versionfile_build = 'myproject/_version.py'
         versioneer.tag_prefix = '' # tags are like 1.2.0
@@ -132,14 +150,14 @@ To versioneer-enable your project:
         version=versioneer.get_version(),
         cmdclass=versioneer.get_cmdclass(),
 
-* 4: now run `setup.py update_files`, which will create `_version.py`, and
-  will modify your `__init__.py` to define `__version__` (by calling a
-  function from `_version.py`). It will also modify your `MANIFEST.in` to
-  include both `versioneer.py` and the generated `_version.py` in sdist
-  tarballs.
+* 4: now run `setup.py versioneer`, which will create `_version.py`, and will
+  modify your `__init__.py` (if one exists next to `_version.py`) to define
+  `__version__` (by calling a function from `_version.py`). It will also
+  modify your `MANIFEST.in` to include both `versioneer.py` and the generated
+  `_version.py` in sdist tarballs.
 
 * 5: commit these changes to your VCS. To make sure you won't forget,
-  `update_files` will mark everything it touched for addition.
+  `setup.py versioneer` will mark everything it touched for addition.
 
 ## Post-Installation Usage
 
@@ -199,12 +217,34 @@ for a hash-based revision id), but is safe to use in a `setup.py`
 "`version=`" argument. It also enables tools like *pip* to compare version
 strings and evaluate compatibility constraint declarations.
 
-The `setup.py update_files` command adds the following text to your
+The `setup.py versioneer` command adds the following text to your
 `__init__.py` to place a basic version in `YOURPROJECT.__version__`:
 
     from ._version import get_versions
-    __version = get_versions()['version']
+    __version__ = get_versions()['version']
     del get_versions
+
+## Updating Versioneer
+
+To upgrade your project to a new release of Versioneer, do the following:
+
+* install the new Versioneer (`pip install -U versioneer` or equivalent)
+* re-run `versioneer-installer` in your source tree to replace your copy of
+  `versioneer.py`
+* edit `setup.py`, if necessary, to include any new configuration settings
+  indicated by the release notes
+* re-run `setup.py versioneer` to replace `SRC/_version.py`
+* commit any changed files
+
+### Upgrading from 0.10 to 0.11
+
+You must add a `versioneer.VCS = "git"` to your `setup.py` before re-running
+`setup.py versioneer`. This will enable the use of additional version-control
+systems (SVN, etc) in the future.
+
+### Upgrading from 0.11 to 0.12
+
+Nothing special.
 
 ## Future Directions
 

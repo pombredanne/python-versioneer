@@ -1,8 +1,4 @@
-
-import subprocess
-import sys
-import errno
-
+import sys, subprocess, errno # --STRIP DURING BUILD
 
 def run_command(commands, args, cwd=None, verbose=False, hide_stderr=False):
     assert isinstance(commands, list)

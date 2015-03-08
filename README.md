@@ -6,8 +6,12 @@ The Versioneer
 * Brian Warner
 * License: Public Domain
 * Compatible With: python2.6, 2.7, 3.2, 3.3, 3.4, and pypy
-
-[![Build Status](https://travis-ci.org/warner/python-versioneer.png?branch=master)](https://travis-ci.org/warner/python-versioneer)
+* [![Latest Version]
+(https://pypip.in/version/versioneer/badge.svg?style=flat)
+](https://pypi.python.org/pypi/versioneer/)
+* [![Build Status]
+(https://travis-ci.org/warner/python-versioneer.png?branch=master)
+](https://travis-ci.org/warner/python-versioneer)
 
 This is a tool for managing a recorded version number in distutils-based
 python projects. The goal is to remove the tedious and error-prone "update
@@ -99,7 +103,7 @@ First, decide on values for the following configuration variables:
   append some `__version__`-setting assignments, if they aren't already
   present.
 
-*  `versionfile_build`:
+* `versionfile_build`:
 
   Like `versionfile_source`, but relative to the build directory instead of
   the source directory. These will differ when your setup.py uses
@@ -138,12 +142,14 @@ To versioneer-enable your project:
 * 2: add the following lines to the top of your `setup.py`, with the
   configuration values you decided earlier:
 
-        import versioneer
-        versioneer.VCS = 'git'
-        versioneer.versionfile_source = 'src/myproject/_version.py'
-        versioneer.versionfile_build = 'myproject/_version.py'
-        versioneer.tag_prefix = '' # tags are like 1.2.0
-        versioneer.parentdir_prefix = 'myproject-' # dirname like 'myproject-1.2.0'
+  ````
+  import versioneer
+  versioneer.VCS = 'git'
+  versioneer.versionfile_source = 'src/myproject/_version.py'
+  versioneer.versionfile_build = 'myproject/_version.py'
+  versioneer.tag_prefix = '' # tags are like 1.2.0
+  versioneer.parentdir_prefix = 'myproject-' # dirname like 'myproject-1.2.0'
+  ````
 
 * 3: add the following arguments to the setup() call in your setup.py:
 
@@ -191,17 +197,19 @@ import the top-level `versioneer.py` and run `get_versions()`.
 Both functions return a dictionary with different keys for different flavors
 of the version string:
 
-* `['version']`: condensed tag+distance+shortid+dirty identifier. For git,
-  this uses the output of `git describe --tags --dirty --always` but strips
-  the tag_prefix. For example "0.11-2-g1076c97-dirty" indicates that the tree
-  is like the "1076c97" commit but has uncommitted changes ("-dirty"), and
-  that this commit is two revisions ("-2-") beyond the "0.11" tag. For
-  released software (exactly equal to a known tag), the identifier will only
-  contain the stripped tag, e.g. "0.11".
+* `['version']`: A condensed PEP440-compliant string, equal to the
+  un-prefixed tag name for actual releases, and containing an additional
+  "local version" section with more detail for in-between builds. For Git,
+  this is TAG[+DISTANCE.gHEX[.dirty]] , using information from `git describe
+  --tags --dirty --always`. For example "0.11+2.g1076c97.dirty" indicates
+  that the tree is like the "1076c97" commit but has uncommitted changes
+  (".dirty"), and that this commit is two revisions ("+2") beyond the "0.11"
+  tag. For released software (exactly equal to a known tag), the identifier
+  will only contain the stripped tag, e.g. "0.11".
 
 * `['full']`: detailed revision identifier. For Git, this is the full SHA1
-  commit id, followed by "-dirty" if the tree contains uncommitted changes,
-  e.g. "1076c978a8d3cfc70f408fe5974aa6c092c949ac-dirty".
+  commit id, followed by ".dirty" if the tree contains uncommitted changes,
+  e.g. "1076c978a8d3cfc70f408fe5974aa6c092c949ac.dirty".
 
 Some variants are more useful than others. Including `full` in a bug report
 should allow developers to reconstruct the exact code being tested (or
@@ -209,13 +217,6 @@ indicate the presence of local changes that should be shared with the
 developers). `version` is suitable for display in an "about" box or a CLI
 `--version` output: it can be easily compared against release notes and lists
 of bugs fixed in various releases.
-
-In the future, this will also include a
-[PEP-0440](http://legacy.python.org/dev/peps/pep-0440/) -compatible flavor
-(e.g. `1.2.post0.dev123`). This loses a lot of information (and has no room
-for a hash-based revision id), but is safe to use in a `setup.py`
-"`version=`" argument. It also enables tools like *pip* to compare version
-strings and evaluate compatibility constraint declarations.
 
 The `setup.py versioneer` command adds the following text to your
 `__init__.py` to place a basic version in `YOURPROJECT.__version__`:

@@ -5,10 +5,14 @@
 @README@
 """
 
-import os, sys, re, subprocess, errno
-from distutils.core import Command
-from distutils.command.sdist import sdist as _sdist
+import errno
+import os
+import re
+import subprocess
+import sys
 from distutils.command.build import build as _build
+from distutils.command.sdist import sdist as _sdist
+from distutils.core import Command
 
 # these configuration settings will be overridden by setup.py after it
 # imports us

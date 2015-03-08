@@ -1,5 +1,6 @@
 import sys, subprocess, errno # --STRIP DURING BUILD
 
+
 def run_command(commands, args, cwd=None, verbose=False, hide_stderr=False):
     assert isinstance(commands, list)
     p = None
@@ -23,11 +24,10 @@ def run_command(commands, args, cwd=None, verbose=False, hide_stderr=False):
             print("unable to find command, tried %s" % (commands,))
         return None
     stdout = p.communicate()[0].strip()
-    if sys.version >= '3':
+    if sys.version_info[0] >= 3:
         stdout = stdout.decode()
     if p.returncode != 0:
         if verbose:
             print("unable to run %s (error)" % args[0])
         return None
     return stdout
-

@@ -1,3 +1,4 @@
+*.pyc
 /_test/
 /build/
 /versioneer.py
@@ -5,3 +6,5 @@
 /MANIFEST
 /dist/
 /versioneer.egg-info/
+/.idea
+/.tox/

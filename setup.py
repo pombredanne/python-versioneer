@@ -3,7 +3,7 @@
 import os, base64, tempfile, io
 from os import path
 from setuptools import setup, Command
-from distutils.command.build_scripts import build_scripts
+from setuptools.command.build_py import build_py
 from setuptools.dist import Distribution as _Distribution
 
 LONG="""
@@ -13,7 +13,7 @@ version-control system about the current tree.
 """
 
 # as nice as it'd be to versioneer ourselves, that sounds messy.
-VERSION = "0.13+dev"
+VERSION = "0.18"
 
 
 def ver(s):
@@ -53,22 +53,28 @@ def get_vcs_list():
             in os.listdir(project_path)
             if path.isdir(path.join(project_path, filename))]
 
-def generate_versioneer():
+def generate_long_version_py(VCS):
+    s = io.StringIO()
+    s.write(get("src/%s/long_header.py" % VCS, add_ver=True, do_strip=True))
+    for piece in ["src/subprocess_helper.py",
+                  "src/from_parentdir.py",
+                  "src/%s/from_keywords.py" % VCS,
+                  "src/%s/from_vcs.py" % VCS,
+                  "src/render.py",
+                  "src/%s/long_get_versions.py" % VCS]:
+        s.write(get(piece, unquote=True, do_strip=True))
+    return s.getvalue()
+
+def generate_versioneer_py():
     s = io.StringIO()
     s.write(get("src/header.py", add_ver=True, do_readme=True))
     s.write(get("src/subprocess_helper.py", do_strip=True))
 
     for VCS in get_vcs_list():
         s.write(u("LONG_VERSION_PY['%s'] = '''\n" % VCS))
-        s.write(get("src/%s/long_header.py" % VCS, add_ver=True, do_strip=True))
-        s.write(get("src/subprocess_helper.py", unquote=True, do_strip=True))
-        s.write(get("src/from_parentdir.py", unquote=True, do_strip=True))
-        s.write(get("src/%s/from_keywords.py" % VCS,
-                    unquote=True, do_strip=True))
-        s.write(get("src/%s/from_vcs.py" % VCS, unquote=True, do_strip=True))
-        s.write(get("src/%s/long_get_versions.py" % VCS,
-                    unquote=True, do_strip=True))
+        s.write(generate_long_version_py(VCS))
         s.write(u("'''\n"))
+        s.write(u("\n\n"))
 
         s.write(get("src/%s/from_keywords.py" % VCS, do_strip=True))
         s.write(get("src/%s/from_vcs.py" % VCS, do_strip=True))
@@ -77,8 +83,10 @@ def generate_versioneer():
 
     s.write(get("src/from_parentdir.py", do_strip=True))
     s.write(get("src/from_file.py", add_ver=True, do_strip=True))
-    s.write(get("src/get_versions.py", add_ver=True, do_strip=True))
-    s.write(get("src/cmdclass.py", add_ver=True, do_strip=True))
+    s.write(get("src/render.py", do_strip=True))
+    s.write(get("src/get_versions.py", do_strip=True))
+    s.write(get("src/cmdclass.py", do_strip=True))
+    s.write(get("src/setupfunc.py", do_strip=True))
 
     return s.getvalue().encode("utf-8")
 
@@ -93,7 +101,7 @@ class make_versioneer(Command):
         pass
     def run(self):
         with open("versioneer.py", "w") as f:
-            f.write(generate_versioneer().decode("utf8"))
+            f.write(generate_versioneer_py().decode("utf8"))
         return 0
 
 class make_long_version_py_git(Command):
@@ -106,19 +114,20 @@ class make_long_version_py_git(Command):
         pass
     def run(self):
         assert os.path.exists("versioneer.py")
-        from versioneer import LONG_VERSION_PY
+        long_version = generate_long_version_py("git")
         with open("git_version.py", "w") as f:
-            f.write(LONG_VERSION_PY["git"] %
+            f.write(long_version %
                     {"DOLLAR": "$",
+                     "STYLE": "pep440",
                      "TAG_PREFIX": "tag-",
                      "PARENTDIR_PREFIX": "parentdir_prefix",
                      "VERSIONFILE_SOURCE": "versionfile_source",
                      })
         return 0
 
-class my_build_scripts(build_scripts):
+class my_build_py(build_py):
     def run(self):
-        v = generate_versioneer()
+        v = generate_versioneer_py()
         v_b64 = base64.b64encode(v).decode("ascii")
         lines = [v_b64[i:i+60] for i in range(0, len(v_b64), 60)]
         v_b64 = "\n".join(lines)+"\n"
@@ -128,15 +137,17 @@ class my_build_scripts(build_scripts):
         s = ver(s.replace("@VERSIONEER-INSTALLER@", v_b64))
 
         tempdir = tempfile.mkdtemp()
-        installer = os.path.join(tempdir, "versioneer-installer")
+        installer = os.path.join(tempdir, "versioneer.py")
         with open(installer, "w") as f:
             f.write(s)
 
-        self.scripts = [installer]
-        rc = build_scripts.run(self)
+        self.py_modules = [os.path.splitext(os.path.basename(installer))[0]]
+        self.package_dir.update({'': os.path.dirname(installer)})
+        rc = build_py.run(self)
         os.unlink(installer)
         os.rmdir(tempdir)
         return rc
+
 
 # python's distutils treats module-less packages as binary-specific (not
 # "pure"), so "setup.py bdist_wheel" creates binary-specific wheels. Override
@@ -156,10 +167,15 @@ setup(
     # "fake" is replaced with versioneer-installer in build_scripts. We need
     # a non-empty list to provoke "setup.py build" into making scripts,
     # otherwise it skips that step.
-    scripts = ["fake"],
+    py_modules = ["fake"],
+    entry_points={
+        'console_scripts': [
+            'versioneer = versioneer:main',
+        ],
+    },
     long_description = LONG,
     distclass=Distribution,
-    cmdclass = { "build_scripts": my_build_scripts,
+    cmdclass = { "build_py": my_build_py,
                  "make_versioneer": make_versioneer,
                  "make_long_version_py_git": make_long_version_py_git,
                  },
@@ -172,5 +188,6 @@ setup(
         "Programming Language :: Python :: 3.2",
         "Programming Language :: Python :: 3.3",
         "Programming Language :: Python :: 3.4",
+        "Programming Language :: Python :: 3.5"
         ],
     )

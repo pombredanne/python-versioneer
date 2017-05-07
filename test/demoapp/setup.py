@@ -1,11 +1,6 @@
 
-from distutils.core import setup
+from setuptools import setup
 import versioneer
-versioneer.versionfile_source = "src/demo/_version.py"
-versioneer.versionfile_build = "demo/_version.py"
-versioneer.tag_prefix = "demo-"
-versioneer.parentdir_prefix = "demo-"
-versioneer.VCS = "@VCS@"
 commands = versioneer.get_cmdclass().copy()
 
 setup(name="demo",
@@ -14,8 +9,9 @@ setup(name="demo",
       url="url",
       author="author",
       author_email="email",
+      zip_safe=True,
       packages=["demo"],
-      package_dir={"demo": "src/demo"},
+      package_dir={"": "src"},
       scripts=["bin/rundemo"],
       cmdclass=commands,
       )
